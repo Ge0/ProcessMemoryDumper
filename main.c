@@ -10,6 +10,7 @@ static BOOL GetProcessEnvironmentBlock(HANDLE hProcess, PPEB pPeb);
 static BOOL GetProcessLoaderData(HANDLE hProcess, const PPEB peb, PPEB_LDR_DATA pPebLdrData);
 static PDWORD GetThreadsOfProcess(DWORD dwPid, PDWORD lpNumberOfThreads);
 static PIMAGE_NT_HEADERS GetImageNtHeadersOfProcess(HANDLE hProcess, LPVOID lpBaseAddress);
+static DWORD EnablePrivilege(char *lpPrivilege);
 
 int main(int argc, char** argv) {
 
@@ -34,6 +35,8 @@ int main(int argc, char** argv) {
 
 	dwPid = atoi(argv[1]);
 
+	EnablePrivilege("SeDebugPrivilege");
+	
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
 	if(hProcess == NULL) {
 		fprintf(stderr, "OpenProcess(): %d\n", GetLastError());
@@ -297,4 +300,39 @@ static BOOL GetProcessLoaderData(HANDLE hProcess, const PPEB peb, PPEB_LDR_DATA 
         &dwBytesRead
     );
 
+}
+
+static DWORD EnablePrivilege(char *lpPrivilege) {
+	HANDLE hToken;
+	DWORD Ret=1;
+	TOKEN_PRIVILEGES TP;
+	//LUID Luid;
+
+	if(!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken)) {
+		fprintf(stderr, "[-] Error with OpenProcessToken: %d!\n", GetLastError());
+		return 0;
+	}
+
+	if(!LookupPrivilegeValue(NULL, lpPrivilege, &TP.Privileges[0].Luid)) {
+		fprintf(stderr, "[-] Error with LookupPrivilegeValue: %d\n", GetLastError());
+		CloseHandle(hToken);
+		return 0;
+
+	}
+
+	TP.PrivilegeCount = 1;
+	TP.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+	if(!AdjustTokenPrivileges(hToken,
+	FALSE,
+	&TP,
+	0,
+	NULL,
+	NULL)) {
+		printf("[-] Error with AdjustTokenPrivileges: %d!\n", GetLastError());
+		CloseHandle(hToken);
+		return 0;
+
+	}
+	return 1;
 }
